@@ -1,0 +1,49 @@
+#version 330 core
+//输入：一个图元（如点或三角形）的一组顶点
+layout (triangles) in;
+
+//输出：输出的图元类型：描述了输出的图元类型
+layout (triangle_strip, max_vertices = 3) out;
+
+//因为几何着色器总是接收一组顶点作为输入，即使我们输入单个顶点，
+in VS_OUT {
+    vec2 texCoords;
+} gs_in[];
+//如果不是用接口块，则可以：in vec3 vColor[];
+
+out vec2 TexCoords; //发给片段着色器的数据
+uniform float time;	//时间
+
+vec3 GetNormal();
+vec4 explode(vec4 position,vec3 normal);//该函数将顶点坐标沿着向量方向平移
+void main() {
+	//获取法向量：将其应用于每个顶点
+	vec3 normal = GetNormal();
+	
+	gl_Position = explode(gl_in[0].gl_Position , normal);
+	TexCoords = gs_in[0].texCoords ; //获取来自顶点着色器中的颜色数据，并传给下一个
+	EmitVertex();
+
+	gl_Position = explode(gl_in[1].gl_Position , normal);
+	TexCoords = gs_in[1].texCoords ; //获取来自顶点着色器中的颜色数据，并传给下一个
+	EmitVertex();
+
+	gl_Position = explode(gl_in[2].gl_Position , normal);
+	TexCoords = gs_in[2].texCoords ; //获取来自顶点着色器中的颜色数据，并传给下一个
+	EmitVertex();
+
+	EndPrimitive();
+}
+
+//获取一个三角形的两条边对应的向量，
+vec3 GetNormal(){
+	vec3 a = vec3(gl_in[0].gl_Position) - vec3(gl_in[1].gl_Position) ;	//	1->0
+	vec3 b = vec3(gl_in[2].gl_Position) - vec3(gl_in[1].gl_Position) ;	//	1->2
+	return normalize(cross(a, b));	//注意顺序。
+}
+
+vec4 explode(vec4 position,vec3 normal){
+	float magnitude = 2.0f;
+	vec3 direction = normal * (sin(time) + 1.0f) /2.0f * magnitude ;
+	return position + vec4(direction, 0.0f);
+}

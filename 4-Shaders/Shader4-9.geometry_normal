@@ -1,0 +1,31 @@
+#version 330 core
+//输入：一个图元（如点或三角形）的一组顶点
+layout (triangles) in;
+
+//输出：输出的图元类型：描述了输出的图元类型
+layout (line_strip, max_vertices = 6) out;
+
+//因为几何着色器总是接收一组顶点作为输入，即使我们输入单个顶点，
+in VS_OUT {
+    vec3 normal;
+} gs_in[];
+
+
+void Generate_Normal(int index){
+	gl_Position = gl_in[index].gl_Position;
+	EmitVertex();
+
+	gl_Position = gl_Position +  vec4( normalize(gs_in[index].normal) , 0.0f)*0.03f;
+	EmitVertex();
+
+	EndPrimitive();
+}
+void main() {
+	//获取法向量：将其应用于每个顶点
+	
+	//gl_Position = (gl_in[0].gl_Position + gl_in[1].gl_Position + gl_in[2].gl_Position)/3;//三角形片段的中心
+	Generate_Normal(0);
+	Generate_Normal(1);
+	Generate_Normal(2);
+}
+

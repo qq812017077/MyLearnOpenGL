@@ -1,0 +1,86 @@
+#version 330 core
+out float FragColor;
+//out vec4 FragColor;
+in vec2 TexCoords;
+
+uniform sampler2D gPosition;
+uniform sampler2D gNormal;
+uniform sampler2D texNoise;
+
+uniform vec3 samples[64];
+uniform mat4 projection;
+
+// tile noise texture over screen based on screen dimensions divided by noise size
+const vec2 noiseScale = vec2(1280.0/4.0, 720.0/4.0); // screen = 1280x720
+
+// parameters (you'd probably want to use them as uniforms to more easily tweak the effect)
+int kernelSize = 64;
+float radius = 0.5;
+float bias = 0.025;
+
+void main()
+{
+    vec3 fragPos   = texture(gPosition, TexCoords).xyz;	//注意这里的fragPos是在View Space 下的。
+	vec3 normal    = texture(gNormal, TexCoords).rgb;
+	vec3 randomVec = texture(texNoise, TexCoords * noiseScale).xyz;	//被放大到了1280 * 720
+
+	//构建正交切线空间：注意该切线空间是在观察空间的。
+	vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));	//normal * dot(randomVec, normal) 即 randomVec在normal的投影向量
+	vec3 bitangent = cross(normal, tangent);
+	mat3 TBN = mat3(tangent, bitangent, normal);	//这里的TBN是从切线空间到观察空间的变换矩阵
+
+	//接下来我们对每个核心样本进行迭代，将样本从切线空间变换到观察空间，将它们加到当前片段位置上，
+	//并将片段位置深度与储存在原始深度缓冲中的样本深度进行比较。我们来一步步讨论它：
+	
+	float occlusion = 0.0;	//遮蔽因子
+	for(int i = 0; i < kernelSize; ++i)	//这里的kernelSize和radius变量都可以用来调整效果；在这里我们分别保持他们的默认值为64和0.5。
+	{
+		/*	1.对于每一次迭代，我们首选将各自的采样转换到观察空间下。然后将观察空间内核偏移采样添加到观察空间下的片段位置上。
+		我们通过对采样乘以radius来增加（或减少）SSAO的有效采样半径。*/
+		vec3 sample = TBN * samples[i]; //将采样向量从切线空间->观察空间
+		sample = fragPos + sample * radius; 
+		
+		/*2.接下来，我们要将sample转换到屏幕空间，所以我们可以采样sample的位置/深度值
+		就好象我们将它的位置直接渲染在了屏幕上。*/
+			//（1）因为向量当前在视图空间，我们将首先使用projection矩阵转换其到裁剪空间
+			vec4 offset = vec4(sample, 1.0);	
+			offset      = projection * offset;    // from view to clip-space
+			//（2）在转换到裁减空间后，我们用xyz分量除以w分量进行透视划分。
+			offset.xyz /= offset.w;               // perspective divide
+		
+			//（3）然后最终的标准化设备空间被转换到[0.0 , 1.0]范围，因此我们可以使用其去采集位置纹理。
+			offset.xyz  = offset.xyz * 0.5 + 0.5; // transform to range 0.0 - 1.0  
+		
+		/*3.我们然后检查深度值是否大于保存的深度值，如果大于，添加到最终的贡献因子上。注意这里对于
+		源片段深度值添加了一个bias值，此处为0.25。偏移量不是总是必须的，但是这有助于帮助SSAO在视觉上的调整。
+		并且可可以解决粉刺的效果，这可能出现在复杂的场景中。*/
+		
+		float sampleDepth = texture(gPosition, offset.xy).z;	//注意offset即采样点转换到屏幕空间后的坐标，再通过纹理即可得对应的深度
+		//occlusion += (sampleDepth >= sample.z + bias ? 1.0 : 0.0);
+		/*还没有结束！	我们还需要考虑一个问题，每当我们要检测一个非常靠近表面边缘的片段时，它将会考虑低于测试表面的表面深度值。
+		这些值会对遮蔽因子产生不正确的影响。我们可以通过加入一个范围检测来解决这个问题：*/
+		float rangeCheck = smoothstep(0.0, 1.0, radius / abs(fragPos.z - sampleDepth));	//smoothstep是一个GLSL内置函数，可以获取平滑参数。
+		occlusion       += (sampleDepth >= sample.z + bias ? 1.0 : 0.0) * rangeCheck;   
+		//这里使用平滑的插值函数而不是硬界限范围检测，否则会在检测边缘产生很难看的边缘
+	}
+
+	//最后，我们需要将遮蔽贡献根据核心的大小标准化，并输出结果。注意我们这里用 1 - 遮蔽因子，所以我们能直接使用遮蔽因子去缩放环境光组分
+	occlusion = 1.0 - (occlusion / kernelSize);//这样的话，遮蔽量越大，FargColor就越小了。
+	FragColor = occlusion;
+	//FragColor = vec4(fragPos , 1.0f);
+}
+/*
+	这里要注意的是：
+		noiseScalse变量，我们想要将噪声纹理平铺到屏幕，但是因为TexCoords在0.0-1.0之间变化，所以TexNoise
+	纹理根本不能平铺。所以我们要计算TexCoords坐标的缩放程度，为屏幕尺寸除以噪声纹理大小：
+			vec3 randomVec = texture(texNoise, TexCoords * noiseScale).xyz;  
+
+	因为我们设置了TexNoise的环绕方式为GL_REPEAT，随机值将在全屏进行重复。
+	加上 fragPos 和 normal 向量， 我们就有足够的数据来创建TBN矩阵，将向量从切线空间转换到观察空间。
+
+
+	注意这里的切线空间构造方法：
+	通过使用一个叫做Gramm-Schmidt处理(Gramm-Schmidt Process)的过程，我们创建了一个正交基(Orthogonal Basis)，
+	每一次它都会根据randomVec的值稍微倾斜。注意因为我们使用了一个随机向量来构造切线向量，我们没必要有一个恰
+	好沿着几何体表面的TBN矩阵，也就是不需要逐顶点切线(和双切)向量。
+*/

@@ -1,0 +1,29 @@
+#version 330 core
+layout (triangles) in;
+layout (triangle_strip, max_vertices=18) out;
+//我们输入一个三角形，输出总共6个三角形（6*3顶点，所以总共18个顶点）
+uniform mat4 shadowMatrices[6];
+
+out vec4 FragPos; // FragPos from GS (output per emitvertex):每次发射粒子的时候输出
+
+void main()
+{
+	/*
+	main函数中，迭代6的立方贴图的面，通过设置gl_Layer来指定每个面作为输出面。
+		然后通过使用光的空间变换矩阵，将每个世界空间顶点变换到相应的光空间中，继而形成三角形。
+
+		注意我们也将FragPos变量，也即点的坐标发送给了下一步的片段着色器。
+	*/
+
+    for(int face = 0; face < 6; ++face)
+    {
+        gl_Layer = face; // built-in variable that specifies to which face we render.
+        for(int i = 0; i < 3; ++i) // for each triangle's vertices
+        {
+            FragPos = gl_in[i].gl_Position;
+            gl_Position = shadowMatrices[face] * FragPos;
+            EmitVertex();
+        }    
+        EndPrimitive();
+    }
+} 

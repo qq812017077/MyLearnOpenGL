@@ -1,0 +1,19 @@
+#version 330 core
+out vec4 FragColor;
+
+struct Material{
+	sampler2D texture_diffuse1;	//这里不再保存ambient，因为通常ambient和diffuse一致。 
+	sampler2D texture_specular1;
+	sampler2D texture_ambient1;
+	float	shininess;
+};
+uniform Material material;
+
+in VS_OUT {
+	vec2 texCoords;
+} fs_out;
+
+void main()
+{
+	FragColor = vec4( texture(material.texture_diffuse1,fs_out.texCoords).rgb, 1.0f);
+}

@@ -1,0 +1,36 @@
+#version 330 core
+//输入：一个图元（如点或三角形）的一组顶点
+layout (points) in;
+/*
+	注意我们在绘制的时候调用了
+	glDrawArrays();并输入了要绘制的图元：
+		GL_POINTS;
+		GL_LINES;
+		GL_TRIANGLES;
+	那么根据绘制的图元类型的不同，对应了不同类型的输入，
+	这里是points，表示输入的是GL_POINTS。
+*/
+
+//输出：输出的图元类型：描述了输出的图元类型
+layout (line_strip, max_vertices = 2) out;
+/*
+	关于输出的图元类型存在以下几种：
+		points
+		line_strip
+		triangle_strip
+	同时，我们还需要输入一个最大的输出顶点数。
+		这里我们的设置：
+			输出线条
+			最大顶点数为2
+*/
+void main() {   
+	//gl_in即上一个着色器的输入变量的顶点数组
+    gl_Position = gl_in[0].gl_Position + vec4(-0.1, 0.0, 0.0, 0.0); 
+    EmitVertex();
+
+    gl_Position = gl_in[0].gl_Position + vec4( 0.1, 0.0, 0.0, 0.0);
+    EmitVertex();
+
+    EndPrimitive();
+	//这里我们发射了两个顶点：原顶点分别向左右发散成两个，
+}

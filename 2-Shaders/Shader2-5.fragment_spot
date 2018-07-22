@@ -1,0 +1,100 @@
+#version 330 core
+
+struct Light{
+	vec3	position;
+
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+};
+struct DirectionalLight{
+	vec3 direction ;
+
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+};
+
+struct PointLight{
+	vec3	position ;
+
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+
+	//term
+	float constant ;
+	float linear ;
+	float quadratic;
+};
+
+struct SpotLight{
+	vec3  position;
+    vec3  direction;
+    float innerCutOff;
+	float outerCutOff;
+
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+};
+
+
+
+struct Material{
+	sampler2D diffuse ;	//这里不再保存ambient，因为通常ambient和diffuse一致。 
+	sampler2D specular;
+	float	shininess;
+};
+uniform SpotLight spotLight ;
+uniform Material material;
+
+uniform vec3 viewerPos ;
+uniform vec3 lightColor;
+uniform bool openSpecular;
+out vec4 FragColor ;
+
+in  vec3 Normal ;
+in vec3 FragPos;
+in vec2 TexCoords;
+
+void main(){
+	vec3 result = vec3(0.0f);
+	vec3 lightDir = normalize(spotLight.position - FragPos);
+
+	float theta  = dot( -lightDir , normalize(spotLight.direction));
+	float epsilon   = spotLight.innerCutOff - spotLight.outerCutOff ;
+	float intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
+	/*
+			theta - spotLight.outCutOff:	即顶点对应角度余弦值和外圆锥对应角度余弦值的差。
+			因为角度越小，值越大。
+				所以 点在 外圆锥以外 值为负。
+	*/
+	if( theta >= spotLight.outerCutOff )
+	{
+		float distance    = length(spotLight.position - FragPos);
+
+		vec3 norm = normalize(Normal);
+	
+		//2.diffuse		漫反射
+		float diff = max( dot(norm , lightDir) ,0.0f);
+
+
+		//3.Specular	镜面反射
+		vec3 viewerDir = normalize(viewerPos - FragPos);
+		vec3 reflectDir = reflect(-lightDir, norm);
+		float spec =0.0f;
+		if(openSpecular)
+			spec = pow( max( dot(viewerDir, reflectDir),0.0f), material.shininess);
+
+		vec3 ambient =  spotLight.ambient * vec3(texture(material.diffuse, TexCoords)) ;	//环境光
+		vec3 diffuse = intensity *  spotLight.diffuse * ( diff * vec3(texture(material.diffuse, TexCoords))   );	//漫反射 
+		vec3 specular = intensity * spotLight.specular * (spec * vec3(texture(material.specular, TexCoords))  ) ;//镜面反射
+
+		result = ambient + diffuse + specular ;
+	}else{
+		result = spotLight.ambient * vec3(texture(material.diffuse, TexCoords));
+	}
+	
+	FragColor = vec4(result, 1.0f);
+}

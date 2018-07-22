@@ -1,0 +1,7 @@
+#version 330 core
+
+void main()
+{             
+    // gl_FragDepth = gl_FragCoord.z;
+	//什么也不做，运行完成后，深度缓冲区被保存
+}

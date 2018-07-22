@@ -1,0 +1,193 @@
+#version 330 core
+
+struct PointLight{
+	vec3	position;
+
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+
+	//term
+	float constant ;
+	float linear ;
+	float quadratic;
+};
+struct Material{
+	sampler2D diffuse ;	//这里不再保存ambient，因为通常ambient和diffuse一致。 
+	sampler2D specular;
+	sampler2D normalMap;
+	sampler2D depthMap;
+	float	shininess;
+};
+
+uniform Material material;
+uniform float height_scale;	//一个缩放因子
+
+uniform bool openEffect;
+uniform bool functoin_exchange;
+
+in VS_OUT {
+    vec3 FragPos;
+    vec2 TexCoords;
+
+	//计算工作都在vertex中完成
+    PointLight TangentLight;
+    vec3 TangentViewPos;
+    vec3 TangentFragPos;	
+} fs_in;
+
+
+out vec4 FragColor ;
+
+//----函数
+/*
+	输入：
+		fragment的纹理坐标,观察方向
+	输出：
+		转换后的经过位移的纹理坐标
+
+	当视线越于表面平行， v.xy/v.z的值就越大，p也就越大。
+	当视线越垂直于表面时，p值则越小！越接近于原来的纹理位置。
+	（所以基本上当看一个表面从某个角度笔记从顶处看，其偏移的纹理坐标越大）
+*/
+//一般视差贴图
+vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir){
+	float height =  texture(material.depthMap, texCoords).r;    
+    
+	//相似三角形： p.xy / v.xy = p.z / v.z --> p.xy = v.xy / v.z * p.z , 不过这里的p.z粗略使用 height*height_scale代替。
+    //我们要求的就是p的z啊 ！！！ ，可以将 v.xy / v.z 理解成 cot 值。 cot底 = 高～～
+	vec2 p = viewDir.xy / viewDir.z * (height * height_scale);	
+	
+	
+	return texCoords - p; // p的方向：frag-view ;  应取反方向
+	//return texCoords - viewDir.xy * (height * height_scale);       
+}
+
+//陡峭视差贴图
+vec2 Steep_ParallaxMapping(vec2 texCoords, vec3 viewDir){
+	//step1:层的分布
+	const float minLayers = 8.0;
+	const float maxLayers = 32.0;
+	float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), viewDir)));	
+	//const float numLayers = 10;				//number of depth layers
+    float layerDepth = 1.0f / numLayers;	// calculate the size of each layer
+    float currentLayerDepth = 0.0;			// depth of current layer
+	
+	//step2:偏移
+	
+	float height =  texture(material.depthMap, texCoords).r;    
+	vec2 p = viewDir.xy / viewDir.z * (height * height_scale);		//My code
+
+    //vec2 P = viewDir.xy * height_scale;	//Official code
+    vec2 deltaTexCoords = p / numLayers;	// the amount to shift the texture coordinates per layer (from vector P)
+
+	vec2 curTexCoords = texCoords;
+
+	//比较当前纹理的深度值是否小于层深度，若小于停止循环，使用当前深度值
+	while(	texture(material.depthMap, curTexCoords).r > currentLayerDepth){
+		curTexCoords -= deltaTexCoords;
+		currentLayerDepth += layerDepth ; 
+	}
+	
+	return curTexCoords; // 返回目标纹理坐标    
+}
+
+//视差遮蔽贴图
+vec2 Steep_ParallaxMapping(vec2 texCoords, vec3 viewDir){
+	//step1:层的分布
+	const float minLayers = 8.0;
+	const float maxLayers = 32.0;
+	float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), viewDir)));	
+	//const float numLayers = 10;				//number of depth layers
+    float layerDepth = 1.0f / numLayers;	// calculate the size of each layer
+    float currentLayerDepth = 0.0;			// depth of current layer
+	
+	//step2:偏移
+	
+	float height =  texture(material.depthMap, texCoords).r;    
+	vec2 p = viewDir.xy / viewDir.z * (height * height_scale);		//My code
+
+    //vec2 P = viewDir.xy * height_scale;	//Official code
+    vec2 deltaTexCoords = p / numLayers;	// the amount to shift the texture coordinates per layer (from vector P)
+
+	vec2 curTexCoords = texCoords;
+
+	//比较当前纹理的深度值是否小于层深度，若小于停止循环，使用当前深度值
+	while(	texture(material.depthMap, curTexCoords).r > currentLayerDepth){
+		curTexCoords -= deltaTexCoords;
+		currentLayerDepth += layerDepth ; 
+	}
+	
+	//获取碰撞前的纹理坐标
+	vec2 prevTexCoords = curTexCoords + deltaTexCoords;
+
+	// 为线性插值获取碰撞前后的深度值，
+	float afterDepth  = texture(material.depthMap, curTexCoords).r  - currentLayerDepth;	//碰撞后的深度值差：纹理深度-层深度 < 0
+	float beforeDepth = texture(material.depthMap, prevTexCoords).r - (currentLayerDepth - layerDepth);	//碰撞前的深度值： 纹理深度-层深度 >0
+
+	/*
+		注意这里的 afterDepth 和 beforeDepth都是差值。
+		差值越小，说明实际值越接近，
+		则在权重分配的时候应赋予更大的权重！
+
+		简而言之：小差值对应大权重
+	*/
+	float weight = afterDepth / (afterDepth - beforeDepth);
+	vec2 finalTexCoords = prevTexCoords * weight + currentTexCoords * (1.0 - weight);
+	// currentTexCoords - (currentTexCoords - prevTexCoords) * weight
+
+	return finalTexCoords; // 返回目标纹理坐标
+}
+vec3 Blinn_Phong_PointLight(PointLight light , vec3 viewerPos, vec3 FragPos , vec3 norm , vec2 TexCoords);
+void main(){
+//注意所有的计算在切线空间中进行
+	vec3 result = vec3(0.0f);
+	vec3 frag2view_Dir = normalize(fs_in.TangentViewPos - fs_in.TangentFragPos);
+	vec2 texCoords = Steep_ParallaxMapping(fs_in.TexCoords , frag2view_Dir);
+	//if(texCoords.x > 2.0 || texCoords.y > 2.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
+		//discard;
+	//从法线贴图中获取法线
+	vec3 normal = texture(material.normalMap, fs_in.TexCoords).rgb;	//[0,1]
+	normal = normalize(normal * 2.0 - 1.0);	//[-1,1]
+
+	if(openEffect){
+		result = Blinn_Phong_PointLight( fs_in.TangentLight , fs_in.TangentViewPos , fs_in.TangentFragPos , normal , texCoords);//vec3(0.0f,0.0f,1.0f)
+	}else{
+		result = Blinn_Phong_PointLight( fs_in.TangentLight , fs_in.TangentViewPos , fs_in.TangentFragPos , normal , fs_in.TexCoords);
+	}
+	FragColor = vec4(result, 1.0f);
+}
+
+vec3 Blinn_Phong_PointLight(PointLight light , vec3 viewerPos, vec3 FragPos , vec3 norm , vec2 TexCoords){
+	vec3 ambient	= vec3(0.0f); 
+	vec3 diffuse	= vec3(0.0f);
+	vec3 specular	= vec3(0.0f);
+
+	vec3 diffuse_color = texture(material.diffuse, TexCoords).rgb;
+	vec3 specular_color = texture(material.specular, TexCoords).rgb;
+	//1.ambient 
+	ambient = light.ambient * diffuse_color ;
+
+	//2.diffuse		漫反射
+	vec3 lightDir = normalize(light.position - FragPos);//指向光
+	float diff = max( dot(norm , lightDir) ,0.0f);	
+	diffuse =  light.diffuse * (diff * diffuse_color ) ;
+
+	//3.specular   镜面反射
+	vec3 viewerDir = normalize(viewerPos - FragPos);
+	vec3 halfwayDir = normalize(lightDir + viewerDir);
+
+	float spec = 0.0f;
+	spec = pow( max( dot(norm, halfwayDir),0.0f), 4 * material.shininess);
+	specular = light.specular * (spec * specular_color ) ;//镜面反射
+
+		//光的衰弱
+	float distance    = length(light.position - FragPos);
+	float attenuation = 1.0 / (light.constant + light.linear * distance +  light.quadratic * (distance * distance)); 
+
+	diffuse *= attenuation ;
+	specular *= attenuation ;
+
+	return ambient + diffuse + specular;
+
+}

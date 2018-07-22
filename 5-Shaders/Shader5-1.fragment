@@ -1,0 +1,118 @@
+#version 330 core
+
+struct DirectionalLight{
+	vec3	direction ;
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+};
+
+
+struct PointLight{
+	vec3	position;
+
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+
+	//term
+	float constant ;
+	float linear ;
+	float quadratic;
+};
+struct Material{
+	sampler2D diffuse ;	//这里不再保存ambient，因为通常ambient和diffuse一致。 
+	sampler2D specular;
+	float	shininess;
+};
+
+uniform Material material;
+uniform PointLight light ;
+uniform vec3 viewerPos;
+uniform bool openEffect;
+uniform bool functoin_exchange;
+in vec3 Normal;
+in vec2 TexCoords;
+in vec3 FragPos;
+
+out vec4 FragColor ;
+
+//----函数
+vec3 Phong_PointLight(PointLight light , vec3 viewerPos, vec3 FragPos , vec3 norm);
+vec3 Blinn_Phong_PointLight(PointLight light , vec3 viewerPos, vec3 FragPos , vec3 norm);
+void main(){
+	vec3 result = vec3(0.0f);
+	if(functoin_exchange){
+		result = Phong_PointLight(light , viewerPos , FragPos , normalize(Normal));
+	}else{
+		result = Blinn_Phong_PointLight(light , viewerPos , FragPos , normalize(Normal));
+	}
+	FragColor = vec4(result, 1.0f);
+}
+
+vec3 Blinn_Phong_PointLight(PointLight light , vec3 viewerPos, vec3 FragPos , vec3 norm){
+	vec3 ambient	= vec3(0.0f); 
+	vec3 diffuse	= vec3(0.0f);
+	vec3 specular	= vec3(0.0f);
+
+
+	//光的衰弱
+	float distance    = length(light.position - FragPos);
+	float attenuation = 1.0 / (light.constant + light.linear * distance +  light.quadratic * (distance * distance)); 
+
+
+	//1.ambient 
+	ambient = light.ambient * texture(material.diffuse, TexCoords).rgb ;
+	//FragColor = vec4(ambient + diffuse + specular, 1.0f);
+
+	//2.diffuse		漫反射
+	vec3 lightDir = normalize(light.position - FragPos);//指向光
+	float diff = max( dot(norm , lightDir) ,0.0f);	
+	diffuse = attenuation * light.diffuse * (diff * texture(material.diffuse, TexCoords).rgb ) ;
+
+	//3.specular   镜面反射
+	vec3 viewerDir = normalize(viewerPos - FragPos);
+	vec3 halfwayDir = normalize(lightDir + viewerDir);
+
+	float spec = 0.0f;
+	if(openEffect){
+		spec = pow( max( dot(norm, halfwayDir),0.0f), 4 * material.shininess);
+	}
+	specular =attenuation * light.specular * (spec * texture(material.specular, TexCoords).rgb  ) ;//镜面反射
+
+	return ambient + diffuse + specular;
+
+}
+
+
+vec3 Phong_PointLight(PointLight light , vec3 viewerPos, vec3 FragPos , vec3 norm){
+	vec3 ambient	= vec3(0.0f); 
+	vec3 diffuse	= vec3(0.0f);
+	vec3 specular	= vec3(0.0f);
+
+
+	//光的衰弱
+	float distance    = length(light.position - FragPos);
+	float attenuation = 1.0 / (light.constant + light.linear * distance +  light.quadratic * (distance * distance)); 
+
+
+	//1.ambient 
+	ambient = light.ambient * texture(material.diffuse, TexCoords).rgb ;
+	//FragColor = vec4(ambient + diffuse + specular, 1.0f);
+
+	//2.diffuse		漫反射
+	vec3 lightDir = normalize(light.position - FragPos);//指向光
+	float diff = max( dot(norm , lightDir) ,0.0f);	
+	diffuse = attenuation * light.diffuse * (diff * texture(material.diffuse, TexCoords).rgb ) ;
+
+	//3.specular   镜面反射
+	vec3 viewerDir = normalize(viewerPos - FragPos);
+	vec3 reflectDir = reflect(-lightDir, norm);
+	float spec = 0.0f;
+	if(openEffect){
+		spec = pow( max( dot(viewerDir, reflectDir),0.0f), material.shininess);
+	}
+	specular =attenuation * light.specular * (spec * texture(material.specular, TexCoords).rgb  ) ;//镜面反射
+
+	return ambient + diffuse + specular;
+}

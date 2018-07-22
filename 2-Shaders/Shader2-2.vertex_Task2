@@ -1,0 +1,26 @@
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+
+uniform mat4 model;
+uniform mat4 view ;
+uniform mat4 projection ;
+uniform mat4 normalMatrix;
+uniform vec3 lightPos ;
+
+out vec3 Normal ;
+out vec3 FragPos ;
+out vec3 viewer_lightPos ;
+void main()
+{
+	gl_Position = projection * view * model * vec4(aPos,1.0f) ;
+	Normal = vec3(normalMatrix * vec4(aNormal, 0.0));
+	/*
+	下面两种应该都是可以的，区别就在于view的位置与变化与否
+		Normal = vec3(inverse(transpose(view * model)) * vec4(normal, 0.0));	
+		Normal = vec3(view * inverse(transpose( model)) * vec4(normal, 0.0));
+	*/
+
+	FragPos =vec3(view * model * vec4(aPos, 1.0f));		//将点转换为了空间坐标
+	viewer_lightPos = vec3( view * vec4(lightPos,1.0f) ) ;
+}

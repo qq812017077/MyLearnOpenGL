@@ -1,0 +1,61 @@
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+in vec3 Normal;	
+in vec3 Position;
+
+struct Material{
+	sampler2D texture_diffuse1;	//这里不再保存ambient，因为通常ambient和diffuse一致。 
+	sampler2D texture_specular1;
+	sampler2D texture_ambient1;
+	float	shininess;
+};
+
+uniform Material material;
+uniform vec3 cameraPos;
+uniform samplerCube cubemap; // cubemap texture sampler
+uniform bool openEffect;
+//反射
+vec3 reflectLight(vec3 position , vec3 normal , vec3 viewerPos);
+vec3 refractLight(vec3 position , vec3 normal , vec3 viewerPos, float ratio);
+
+
+void main()
+{   
+	if(openEffect){
+		vec3 reflectDir = reflectLight(Position , Normal , cameraPos);
+		float ratio = 1.00 / 1.52 ;	//Glass
+		vec3 reractDir = refractLight(Position , Normal , cameraPos , ratio);
+		//FragColor = vec4( texture(texture1,TexCoords).rgb, 1.0f);
+		FragColor = vec4( texture( cubemap ,reractDir).rgb ,1.0f );
+	}else{
+		//FragColor = vec4( texture( cubemap ,reractDir).rgb ,1.0f );
+		vec3 reflectFactor = texture(material.texture_ambient1, TexCoords).rgb;
+		FragColor =  
+					vec4( texture(material.texture_diffuse1, TexCoords).rgb , 1.0f ) 
+					+ vec4( reflectFactor * vec3( texture(cubemap , reflectLight(Position, Normal, cameraPos)) )  ,1.0f )
+					;
+		/*千万注意因子：reflectFactor 的 位置，我们应该把它和最后的反射纹理坐标进行乘积，而不应该是和反射向量相乘：
+			！！！！！
+				千万注意reflectFactor的位置。
+		*/
+	}
+
+}
+
+vec3 reflectLight(vec3 position , vec3 normal , vec3 viewerPos)
+{
+	vec3 viewerDir = normalize(position - viewerPos );//摄像机到顶点的方向
+	vec3 reflectDir = reflect(viewerDir , normalize(normal));//反射方向
+	
+	return reflectDir;
+}
+
+vec3 refractLight(vec3 position , vec3 normal , vec3 viewerPos ,float ratio)
+{
+	vec3 viewerDir = normalize(position - viewerPos );//摄像机到顶点的方向
+	vec3 refractDir = refract(viewerDir , normalize(normal) , ratio);//反射方向
+	
+	return refractDir;
+}

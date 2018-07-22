@@ -1,0 +1,34 @@
+#version 330 core
+layout (location = 0) out vec3 gPosition;
+layout (location = 1) out vec3 gNormal;
+layout (location = 2) out vec3 gAlbedo;
+
+in vec2 TexCoords;
+in vec3 FragPos;
+in vec3 Normal;
+
+out vec4 FragColor ;
+
+struct Material{
+	sampler2D texture_diffuse1 ;	//这里不再保存ambient，因为通常ambient和diffuse一致。
+	sampler2D texture_specular1;	
+	float	shininess;
+};
+
+uniform Material material;
+
+
+void main()
+{
+	// 将片段的位置向量保存在第一个颜色缓冲区：RGB
+	// store the fragment position vector in the first gbuffer texture
+    gPosition = FragPos;	//注意这里的FragPos是基于View空间下的
+	//gPosition = vec3(0.0f,0.0f,0.8f);
+    // 将法向量保存在第二个颜色缓冲区：RGB
+	gNormal = normalize(Normal);
+    
+    // and the diffuse per-fragment color
+	gAlbedo = vec3(0.95);
+
+}
+

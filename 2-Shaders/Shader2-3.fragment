@@ -1,0 +1,52 @@
+#version 330 core
+struct Light{
+	vec3	position;
+
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+};
+uniform Light light ;
+
+struct Material{
+	vec3	ambient ;
+	vec3	diffuse ;
+	vec3	specular;
+	float	shininess;
+};
+uniform Material material;
+
+uniform vec3 viewerPos ;
+uniform vec3 lightColor;
+uniform bool openSpecular;
+out vec4 FragColor ;
+
+in  vec3 Normal ;
+in vec3 FragPos;
+
+
+void main(){
+	
+	//1.ambient		环境光
+	vec3 ambient = light.ambient * material.ambient ;
+
+	vec3 norm = normalize(Normal);
+	
+	//2.diffuse		漫反射
+	vec3 lightDir = normalize(light.position - FragPos);
+	
+	float diff = max( dot(norm , lightDir) ,0.0f);	
+	vec3 diffuse =  light.diffuse *(material.diffuse * diff);
+
+	//3.Specular	镜面反射
+	vec3 viewerDir = normalize(viewerPos - FragPos);
+	vec3 reflectDir = reflect(-lightDir, norm);
+
+	float spec =0.0f;
+	if(openSpecular)
+		spec = pow( max( dot(viewerDir, reflectDir),0.0f), material.shininess);
+	vec3 specular = light.specular * (material.specular *  spec) ; 
+
+	vec3 result = ambient + diffuse + specular ;
+	FragColor = vec4(result, 1.0f);
+}

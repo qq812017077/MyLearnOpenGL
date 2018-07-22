@@ -1,0 +1,16 @@
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+out vec3 TexCoords;
+
+
+uniform mat4 view;
+uniform mat4 projection;
+
+void main()
+{
+    TexCoords = aPos;//纹理坐标即是顶点坐标。
+    vec4 pos = projection * view * vec4(aPos, 1.0);
+	//盒子永远位于世界坐标系中心，不需要model变换。
+	gl_Position = pos.xyzz;
+}

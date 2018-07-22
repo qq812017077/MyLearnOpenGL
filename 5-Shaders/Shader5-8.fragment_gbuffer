@@ -1,0 +1,32 @@
+#version 330 core
+layout (location = 0) out vec3 gPosition;
+layout (location = 1) out vec3 gNormal;
+layout (location = 2) out vec4 gAlbedoSpec;
+
+in vec2 TexCoords;
+in vec3 FragPos;
+in vec3 Normal;
+
+
+struct Material{
+	sampler2D texture_diffuse1 ;	//这里不再保存ambient，因为通常ambient和diffuse一致。
+	sampler2D texture_specular1;	
+	float	shininess;
+};
+
+uniform Material material;
+
+
+void main()
+{
+	// 将片段的位置向量保存在第一个颜色缓冲区：RGB
+	gPosition = FragPos;
+    // 将法向量保存在第二个颜色缓冲区：RGB
+    
+	gNormal = normalize(Normal);
+    // 将漫反射和镜面光照强度保存在第三个颜色缓冲区：RGBA
+    gAlbedoSpec.rgb = texture(material.texture_diffuse1, TexCoords).rgb;
+    // store specular intensity in gAlbedoSpec's alpha component
+    gAlbedoSpec.a = texture(material.texture_specular1, TexCoords).r;
+}
+

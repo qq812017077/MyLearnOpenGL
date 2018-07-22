@@ -1,0 +1,44 @@
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D hdrBuffer;
+//uniform bool hdr;
+uniform float exposure;
+
+void main()
+{             
+    const float gamma = 2.2;
+    vec3 hdrColor = texture(hdrBuffer, TexCoords).rgb;
+//色调调节法：
+    // 2. Reinhard色调映射
+    //对高的亮度和 低的亮度的调节程度不同：输入：[0,1] 输出： [0,0.5] 之后的部分全部映射在 [0.5 1]之间，即小值的的范围更大，
+	//vec3 mapped = hdrColor / (hdrColor + vec3(1.0));	
+
+	//2. 曝光色调映射
+	vec3 mapped = vec3(1.0) - exp(-hdrColor * exposure);
+    
+	// Gamma校正
+    //mapped = pow(mapped, vec3(1.0 / gamma));
+
+	FragColor = vec4(mapped, 1.0);
+}
+
+/*
+if(hdr)
+    {
+        // reinhard
+        // vec3 result = hdrColor / (hdrColor + vec3(1.0));
+        // exposure
+        vec3 result = vec3(1.0) - exp(-hdrColor * exposure);
+        // also gamma correct while we're at it       
+        result = pow(result, vec3(1.0 / gamma));
+        FragColor = vec4(result, 1.0);
+    }
+    else
+    {
+        vec3 result = pow(hdrColor, vec3(1.0 / gamma));
+        FragColor = vec4(result, 1.0);
+    }
+*/

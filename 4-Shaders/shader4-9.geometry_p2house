@@ -1,0 +1,41 @@
+#version 330 core
+//输入：一个图元（如点或三角形）的一组顶点
+layout (points) in;
+
+
+//输出：输出的图元类型：描述了输出的图元类型
+layout (triangle_strip, max_vertices = 5) out;
+
+
+//因为几何着色器总是接收一组顶点作为输入，即使我们输入单个顶点，
+in VS_OUT {
+    vec3 color;
+} gs_in[];
+//如果不是用接口块，则可以：in vec3 vColor[];
+
+out vec3 fColor;//发给几何着色器的数据
+
+void main() {
+	fColor = gs_in[0].color ; //获取来自顶点着色器中的颜色数据，并传给下一个
+	//left-bottom
+    gl_Position = gl_in[0].gl_Position + vec4(-0.3f,-0.3f, 0.0, 0.0); 
+    EmitVertex();
+	
+	//right-bottom
+    gl_Position = gl_in[0].gl_Position + vec4(0.3f,-0.3f, 0.0, 0.0);
+    EmitVertex();
+
+	//left-top
+    gl_Position = gl_in[0].gl_Position + vec4(-0.3f,0.3f, 0.0, 0.0);
+    EmitVertex();
+
+	//right-top
+    gl_Position = gl_in[0].gl_Position + vec4(0.3f,0.3f, 0.0, 0.0);
+    EmitVertex();
+	
+	//real-top
+    gl_Position = gl_in[0].gl_Position + vec4(0.0f, 0.6f , 0.0, 0.0);
+    fColor = vec3(1.0f,1.0f,1.0f);//单独给屋顶绘制成白色，再由片段着色器进行线性插值
+	EmitVertex();
+    EndPrimitive();
+}

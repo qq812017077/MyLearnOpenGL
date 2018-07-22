@@ -1,0 +1,40 @@
+#version 330 core
+
+out vec4 FragColor ;
+
+//观察空间，观察者即位于原点位置，不需要获取了！！
+//uniform vec3 viewerPos ;
+uniform vec3 objectColor;
+uniform bool openSpecular;
+
+in vec3 viewer_lightPos ;
+in vec3 Normal ;
+in vec3 FragPos;
+
+void main(){
+	//
+	vec3 norm = normalize(Normal);//首先标准化向量：包括法向量和方向向量
+	vec3 lightDir = normalize(viewer_lightPos - FragPos);	//该方向实际上是从Fragment指向光源。这样才能获取正确的光线与法向量的夹角。
+	vec3 viewerDir = normalize(vec3(0.0f) - FragPos);//从Fragmen指向玩家(而玩家是 原点)～
+
+	vec3 reflectDir = reflect(-lightDir, norm);		//反射向量	，注意lightDir才是真正的光照方向
+	
+	//1.ambient		环境光
+	float ambientStrength = 0.2f;				//代表了环境光的强度，是一个比例因子
+	vec3 ambient = lightColor * ambientStrength ;
+
+	//2.diffuse		漫反射
+	float diffuse_diff = max( dot(norm , lightDir) ,0.0f);	//光线方向和法线方向夹角越小，点越小。
+	vec3 diffuse = diffuse_diff * lightColor;
+
+	//3.Specular    镜面反射
+	float specularStrength = 0.5f;	//镜面强度(Specular Intensity)变量
+	float spec = 0.0f;
+	if(openSpecular){
+		spec = pow(max(dot(viewerDir, reflectDir), 0.0), 32);	//在确保反射向量和视角向量的点乘非负时，为其赋予一定的幂次（即发光值）
+	}
+		vec3 specular = specularStrength *  spec * lightColor; //
+
+	vec3 result = (ambient + diffuse + specular) * objectColor ;
+	FragColor = vec4(result, 1.0f);
+}

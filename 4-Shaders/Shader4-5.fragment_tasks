@@ -1,0 +1,124 @@
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D texture1;
+uniform bool openEffect;
+//反相
+vec3 inversion(vec3 texRgb);
+//灰度
+vec3 Grayscale(vec3 texRgb);
+//核效果
+//kernel
+mat3 sharpen_kernel = mat3(
+	-1.0, -1.0, -1.0,
+    -1.0,  9.0, -1.0,
+    -1.0, -1.0, -1.0
+);
+
+mat3 blur_kernel = mat3(
+	1.0 / 16, 2.0 / 16, 1.0 / 16,
+	2.0 / 16, 4.0 / 16, 2.0 / 16,
+	1.0 / 16, 2.0 / 16, 1.0 / 16  
+);
+
+mat3 edgeDetection_kernel = mat3(
+	1.0, 1.0, 1.0,
+	1.0, -8.0, 1.0,
+	1.0, 1.0, 1.0
+);
+vec3 kernel_effect(sampler2D texture , vec2  texCoord , mat3 kernel );
+vec3 kernel_blur(sampler2D texture ,vec2  texCoord );
+
+void main()
+{   
+	if(openEffect){
+		//反相
+		//FragColor = vec4( inversion(texture(texture1,TexCoords).rgb) , 1.0f);
+		//灰度
+		//FragColor = vec4( Grayscale(texture(texture1,TexCoords).rgb) , 1.0f);
+		//尖锐
+		//FragColor = vec4(kernel_effect(texture1 , TexCoords , sharpen_kernel),1.0f);
+
+		//边缘检测
+		FragColor = vec4(kernel_effect(texture1 , TexCoords , edgeDetection_kernel),1.0f);
+
+		//模糊
+		//FragColor = vec4(kernel_effect(texture1 , TexCoords , blur_kernel),1.0f);
+		//FragColor = vec4(kernel_blur(texture1,TexCoords),1.0f);
+	}else{
+		FragColor = vec4( texture(texture1,TexCoords).rgb, 1.0f);
+	}
+
+
+	
+}
+
+vec3 inversion(vec3 texRgb){
+	return vec3(1.0f) - texRgb;
+}
+
+vec3 Grayscale(vec3 texRgb){
+	float average = 0.2126 * texRgb.r + 0.7152 * texRgb.g + 0.0722 * texRgb.b;
+	return vec3(average, average, average);
+}
+
+//kernel effects
+vec3 kernel_effect(sampler2D texture , vec2  texCoord , mat3 kernel ){
+	const float offset = 1.0 / 300; 
+
+	vec2 offsets[9] = vec2[](
+        vec2(-offset, offset),  // top-left
+        vec2(0.0f,    offset),  // top-center
+        vec2(offset,  offset),  // top-right
+        vec2(-offset, 0.0f),    // center-left
+        vec2(0.0f,    0.0f),    // center-center
+        vec2(offset,  0.0f),    // center-right
+        vec2(-offset, -offset), // bottom-left
+        vec2(0.0f,    -offset), // bottom-center
+        vec2(offset,  -offset)  // bottom-right
+    );
+	vec3 sampleTex[9];
+	for(int i = 0; i < 9; i++){
+        sampleTex[i] = vec3(texture(texture, texCoord.st + offsets[i]));
+    }
+
+	vec3 result ;
+	for(int i = 0 , index = 0; i < 3 ; ++i)
+		for(int j = 0 ; j < 3 ; ++j , ++index)
+			result += sampleTex[index] * kernel[i][j];
+
+	return result ;
+}
+
+vec3 kernel_blur(sampler2D texture ,vec2  texCoord ) {
+	float kernel[9] = float[](
+    1.0f / 16, 2.0f / 16, 1.0f / 16,
+    2.0f / 16, 4.0f / 16, 2.0f / 16,
+    1.0f / 16, 2.0f / 16, 1.0f / 16  
+);
+	const float offset = 1.0 / 300; 
+
+	vec2 offsets[9] = vec2[](
+        vec2(-offset, offset),  // top-left
+        vec2(0.0f,    offset),  // top-center
+        vec2(offset,  offset),  // top-right
+        vec2(-offset, 0.0f),    // center-left
+        vec2(0.0f,    0.0f),    // center-center
+        vec2(offset,  0.0f),    // center-right
+        vec2(-offset, -offset), // bottom-left
+        vec2(0.0f,    -offset), // bottom-center
+        vec2(offset,  -offset)  // bottom-right
+    );
+	vec3 sampleTex[9];
+	for(int i = 0; i < 9; i++){
+        sampleTex[i] = vec3(texture(texture, texCoord.st + offsets[i]));
+    }
+
+	vec3 result ;
+	for(int i = 0; i < 9 ; ++i)
+		result += sampleTex[i] * kernel[i];
+
+	return result ;
+}
